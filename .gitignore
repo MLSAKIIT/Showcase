@@ -1,0 +1,52 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Virtual environments
+.venv
+venv/
+ENV/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database
+*.db
+*.sqlite
+
+# Uploads and artifacts
+uploads/
+artifacts/
+generated/
+previews/
+bundles/
+
+# Logs
+*.log
+logs/
+
+# Node modules (for frontend generator and frontend)
+node_modules/
+frontend_generator/node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Generated frontend bundles
+*.zip
+bundle.zip
+
+# OS
+.DS_Store
+Thumbs.db

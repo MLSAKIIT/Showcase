@@ -1,0 +1,17 @@
+{
+  "name": "frontend-generator",
+  "version": "1.0.0",
+  "description": "Frontend generator for resume UI",
+  "main": "generate.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "fs-extra": "^11.1.1"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
