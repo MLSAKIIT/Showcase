@@ -2,17 +2,127 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  background-color: #020617; /* Deep Slate 950 */
-  color: white;
+/* Showcase - Obsidian Dark Theme */
+
+@layer base {
+  :root {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 5%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 5%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 280 100% 70%;
+    --primary-foreground: 240 10% 3.9%;
+
+    --secondary: 240 5% 15%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 5% 15%;
+    --muted-foreground: 240 5% 65%;
+
+    --accent: 280 100% 70%;
+    --accent-foreground: 240 10% 3.9%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5% 18%;
+    --input: 240 5% 18%;
+    --ring: 280 100% 70%;
+
+    --radius: 0.75rem;
+
+    /* Custom obsidian colors */
+    --obsidian: 240 10% 8%;
+    --obsidian-light: 240 8% 12%;
+    --obsidian-lighter: 240 6% 18%;
+    --glow-purple: 280 100% 70%;
+    --glow-pink: 330 100% 70%;
+    --glow-blue: 220 100% 70%;
+
+    --sidebar-background: 240 10% 5%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 280 100% 70%;
+    --sidebar-primary-foreground: 240 10% 3.9%;
+    --sidebar-accent: 240 5% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 5% 18%;
+    --sidebar-ring: 280 100% 70%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 5%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 5%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 280 100% 70%;
+    --primary-foreground: 240 10% 3.9%;
+
+    --secondary: 240 5% 15%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 5% 15%;
+    --muted-foreground: 240 5% 65%;
+
+    --accent: 280 100% 70%;
+    --accent-foreground: 240 10% 3.9%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5% 18%;
+    --input: 240 5% 18%;
+    --ring: 280 100% 70%;
+
+    --sidebar-background: 240 10% 5%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 280 100% 70%;
+    --sidebar-primary-foreground: 240 10% 3.9%;
+    --sidebar-accent: 240 5% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 5% 18%;
+    --sidebar-ring: 280 100% 70%;
+  }
 }
 
-@keyframes scan-glow {
-  0% { transform: translateY(-100%); opacity: 0; }
-  50% { opacity: 1; }
-  100% { transform: translateY(100%); opacity: 0; }
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
 }
 
-.animate-scan {
-  animation: scan-glow 3s infinite linear;
+@layer utilities {
+  .gradient-obsidian {
+    background: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(280 100% 70% / 0.15), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 50%, hsl(330 100% 70% / 0.1), transparent),
+                radial-gradient(ellipse 60% 40% at 20% 80%, hsl(220 100% 70% / 0.1), transparent);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(280 100% 70%), hsl(330 100% 70%), hsl(220 100% 70%));
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 60px hsl(280 100% 70% / 0.3), 0 0 120px hsl(280 100% 70% / 0.1);
+  }
+
+  .border-gradient {
+    border: 1px solid transparent;
+    background: linear-gradient(hsl(240 10% 8%), hsl(240 10% 8%)) padding-box,
+                linear-gradient(135deg, hsl(280 100% 70% / 0.5), hsl(330 100% 70% / 0.5), hsl(220 100% 70% / 0.5)) border-box;
+  }
 }

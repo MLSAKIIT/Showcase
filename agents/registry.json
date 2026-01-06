@@ -1,0 +1,52 @@
+{
+  "pipeline": "portfolio_generation",
+  "version": "1.0",
+
+  "agents": [
+    {
+      "id": "data_agent",
+      "class": "DataAgent",
+      "module": "agents.core.data_agent",
+      "description": "Normalizes raw input into clean text",
+      "inputs": ["input"],
+      "outputs": ["raw_text"],
+      "required": true
+    },
+    {
+      "id": "prompt_agent",
+      "class": "PromptAgent",
+      "module": "agents.core.prompt_agent",
+      "description": "Builds structured prompt from resume text",
+      "inputs": ["raw_text"],
+      "outputs": ["prompt"],
+      "required": true
+    },
+    {
+      "id": "gemini_agent",
+      "class": "GeminiAgent",
+      "module": "agents.core.gemini_agent",
+      "description": "Runs LLM inference",
+      "inputs": ["prompt"],
+      "outputs": ["llm_output"],
+      "required": true
+    },
+    {
+      "id": "schema_builder_agent",
+      "class": "SchemaBuilderAgent",
+      "module": "agents.core.schema_builder",
+      "description": "Converts LLM output to validated schema",
+      "inputs": ["llm_output"],
+      "outputs": ["profile"],
+      "required": true
+    },
+    {
+      "id": "template_selector_agent",
+      "class": "TemplateSelectorAgent",
+      "module": "agents.core.template_selector_agent",
+      "description": "Selects template based on profile",
+      "inputs": ["profile"],
+      "outputs": ["template"],
+      "required": true
+    }
+  ]
+}

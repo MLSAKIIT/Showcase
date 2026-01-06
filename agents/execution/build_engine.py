@@ -71,4 +71,8 @@ class BuildEngine:
   </section>
 </body>
 </html>
+<<<<<<< HEAD
 """
+=======
+"""
+>>>>>>> 1e6abe464a5baebe118a48d62818195d91f563e5

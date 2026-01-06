@@ -20,6 +20,9 @@ class Settings(BaseSettings):
 
     GEMINI_API_KEY: str = Field(..., env="GEMINI_API_KEY")
 
+    GEMINI_VISION_MODEL: str = os.getenv("GEMINI_VISION_MODEL", "gemini-1.5-flash")
+    GEMINI_AGENT_MODEL: str = os.getenv("GEMINI_AGENT_MODEL", "gemini-1.5-pro")
+
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = Field(default_factory=list)
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)

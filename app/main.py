@@ -1,37 +1,48 @@
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.routes import api_router
 from app.core.config import settings
 from app.adapters.database import engine
 from app import models
 
-models.Portfolio.metadata.create_all(bind=engine)
+logger = logging.getLogger(__name__)
 
-def get_application() -> FastAPI:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
 
-    _app = FastAPI(
-        title=settings.PROJECT_NAME,
-        version="1.0.0",
-        description="AI: Transforming resumes into portfolios."
-    )
+    logger.info("Showcase AI: Application starting up")
+    
+    models.Portfolio.metadata.create_all(bind=engine)
+    
+    yield  
+    
+    logger.info("Showcase AI: Application shutting down")
 
-    _app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version="1.0.0",
+    description="Showcase AI: Transforming resumes into stunning portfolios.",
+    debug=settings.DEBUG,
+    lifespan=lifespan
+)
 
-    _app.include_router(api_router, prefix=settings.API_V1_STR)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    return _app
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
-app = get_application()
-
-@app.get("/", tags=["Health Check"])
+@app.get("/health", include_in_schema=False)
 async def health_check():
     return {
         "status": "online",
-        "message": "Welcome AI. Your portfolio is one upload away."
+        "engine": "Gemini-Vision-v1",
+        "version": "1.0.0"
     }

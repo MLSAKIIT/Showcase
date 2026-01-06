@@ -1,316 +1,36 @@
-"""
-async adapter for Google Gemini API.
-
-This module handles all HTTP communication with Gemini, including:
-- Async requests with connection pooling
-- Exponential backoff and retry logic
-- Rate limit detection (429 handling)
-- Response parsing and validation
-- Typed exception handling
-
-Architecture: Called by agents via dependency injection.
-
-Usage:
-    adapter = GeminiAdapter(api_key="...", max_retries=3)
-    text = await adapter.generate_text(prompt="...", temperature=0.7)
-    await adapter.close()
-
-Exceptions:
-    - GeminiAPIError: HTTP/service errors
-    - GeminiRateLimitError: 429 rate limiting
-    - GeminiResponseParseError: Invalid response structure
-    - GeminiEmptyResponseError: Empty content returned
-
-See: agents/generation/content_generator.py for usage examples.
-"""
-
-
 import asyncio
-import logging
-import httpx
-from typing import Optional
-
-logger = logging.getLogger(__name__)
-
-
-# Exception classes for Gemini adapter
-class GeminiError(Exception):
-    """Base exception for Gemini adapter errors."""
-    pass
-
-class GeminiAPIError(GeminiError):
-    """Gemini API returned an error status code."""
-    def __init__(self, status_code: int, message: str):
-        self.status_code = status_code
-        super().__init__(f"Gemini API error {status_code}: {message}")
-
-class GeminiResponseParseError(GeminiError):
-    """Failed to parse Gemini response structure."""
-    pass
-
-class GeminiEmptyResponseError(GeminiError):
-    """Gemini returned empty or invalid content."""
-    pass
-
-class GeminiRateLimitError(GeminiError):
-    """Gemini rate limit exceeded."""
-    pass
+import google.generativeai as genai
+from app.core.config import settings
 
 class GeminiAdapter:
-    """
-    Infrastructure adapter for Google Gemini (REST API).
+    def __init__(self):
+    
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        self.vision_model = genai.GenerativeModel(settings.GEMINI_VISION_MODEL)
 
-    Responsibilities:
-    - Send prompts to Gemini
-    - Handle retries, timeouts, rate limits
-    - Normalize responses
-    - Return raw generated text
-
-    This class MUST NOT:
-    - Perform prompt engineering
-    - Contain business logic
-    - Know about agents or FastAPI
-    """
-
-
-    GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-
-
-    def __init__(self,
-                api_key: str,
-                model_name: str = "gemini-pro",
-                timeout_seconds: int = 30,
-                max_retries: int = 3,
-                ) -> None:
-        
-        if not api_key:
-            raise ValueError("Gemini API key is required")
-
-        self.api_key = api_key
-        self.model_name = model_name
-        self.timeout_seconds = timeout_seconds
-        self.max_retries = max_retries
-
-        self._endpoint = (
-            f"{self.GEMINI_BASE_URL}/models/{self.model_name}:generateContent"
+    async def vision_to_text(self, image_bytes: bytes) -> str:
+       
+        prompt = (
+            "Extract all text from this resume. "
+            "Maintain the hierarchy, formatting, and sections using Markdown."
         )
-        
-        self._client = httpx.AsyncClient(timeout=timeout_seconds)
-
-
-    async def close(self) -> None:
-        """Close the HTTP client. Call this on shutdown."""
-        await self._client.aclose()
-
-
-    async def generate_text(self,
-                            prompt: str,
-                            temperature: float = 0.7,
-                            max_tokens: int = 2048,
-                            ) -> str:
-        
-        """
-        Send a prompt to Gemini and return generated text.
-
-        Args:
-            prompt: Text prompt for generation
-            temperature: Sampling temperature (0.0-1.0)
-            max_tokens: Maximum tokens to generate
-
-        Returns:
-            Generated text as string
-
-        Raises:
-            GeminiAPIError: API request failed
-            GeminiResponseParseError: Response structure invalid
-            GeminiEmptyResponseError: Empty response received
-            GeminiRateLimitError: Rate limit exceeded
-        """
-
-        last_exception: Optional[Exception] = None
-
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                text = await self._call_gemini(
-                    prompt=prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                
-                logger.info(
-                    "Gemini generation succeeded on attempt %d (length: %d chars)",
-                    attempt,
-                    len(text),
-                )
-                return text
-
-            except GeminiRateLimitError as exc:
-                last_exception = exc
-                backoff = min(2 ** (attempt - 1), 60)  # 1s, 2s, 4s, capped at 60s
-                logger.warning(
-                    "Rate limit hit (attempt %d/%d), backing off %ds",
-                    attempt,
-                    self.max_retries,
-                    backoff,
-                )
-                if attempt < self.max_retries:
-                    await asyncio.sleep(backoff)
-                continue
-
-            except (GeminiAPIError, GeminiResponseParseError, GeminiEmptyResponseError) as exc:
-                last_exception = exc
-                logger.warning(
-                    "Gemini request failed (attempt %d/%d): %s",
-                    attempt,
-                    self.max_retries,
-                    str(exc),
-                )
-                if attempt < self.max_retries:
-                    await asyncio.sleep(2 ** (attempt - 1))  # Exponential backoff
-                continue
-
-            except Exception as exc:
-                # Unexpected errors - don't retry
-                logger.error("Unexpected error calling Gemini: %s", exc, exc_info=True)
-                raise GeminiError(f"Unexpected Gemini error: {exc}") from exc
-
-        # All retries have exhausted
-        raise GeminiError(
-            f"Gemini generation failed after {self.max_retries} attempts"
-        ) from last_exception
-
-
-    async def _call_gemini(self,      
-                            prompt: str,
-                            temperature: float,
-                            max_tokens: int,
-                            ) -> str:
-
-        """
-        Low-level Gemini REST API call.
-
-        Responsibilities:
-        - Build request payload
-        - Send HTTP request
-        - Extract generated text
-        - Raise typed errors
-        """
-
-        payload = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": prompt}],
-                }
-            ],
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": max_tokens,
-            },
-        }
-
-        params = {"key": self.api_key}
 
         try:
-            response = await self._client.post(
-                self._endpoint,
-                params=params,
-                json=payload,
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.vision_model.generate_content,
+                    [prompt, {'mime_type': 'image/jpeg', 'data': image_bytes}]
+                ),
+                timeout=30
             )
-        except httpx.TimeoutException as exc:
-            raise GeminiAPIError(0, f"Request timeout after {self.timeout_seconds}s") from exc
-        except httpx.RequestError as exc:
-            raise GeminiAPIError(0, f"Network error: {exc}") from exc
+        except asyncio.TimeoutError:
+            raise RuntimeError("Gemini OCR request timed out after 30 seconds")
+        except Exception as e:
+            raise RuntimeError(f"Gemini SDK encountered an error: {str(e)}")
 
-        # Handle non-200 status codes (429 for rate limiting)
-        if response.status_code == 429:
-            raise GeminiRateLimitError("Rate limit exceeded")
-        
-        if response.status_code >= 500:
-            raise GeminiAPIError(
-                response.status_code,
-                "Gemini service unavailable (5xx error)"
-            )
-        
-        if response.status_code != 200:
-            logger.error(
-                "Gemini API error %d: %s",
-                response.status_code,
-                response.text[:500],
-            )
-            raise GeminiAPIError(
-                response.status_code,
-                f"API request failed: {response.text[:200]}"
-            )
+        if not response or not hasattr(response, 'text') or not response.text:
+            raise RuntimeError("Gemini returned an empty or malformed OCR response")
 
-        # Parse JSON response
-        try:
-            data = response.json()
-        except ValueError as exc:
-            logger.error("Non-JSON response from Gemini: %s", response.text[:500])
-            raise GeminiResponseParseError("Gemini returned non-JSON response") from exc
+        return response.text
 
-        return self._extract_text(data)
-
-
-    def _extract_text(self, data: dict) -> str:
-
-        """
-        Extract generated text from Gemini response.
-
-        Expected response structure:
-        {
-          "candidates": [
-            {
-              "content": {
-                "parts": [{"text": "..."}]
-              }
-            }
-          ]
-        }
-        """
-        
-        # Check for error in the response
-        if "error" in data:
-            error = data["error"]
-            error_code = error.get("code", 0)
-            error_msg = error.get("message", "No error message provided")
-            
-            # Ensure code is int (Gemini sometimes returns string codes)
-            if not isinstance(error_code, int):
-                error_code = 0
-            
-            raise GeminiAPIError(error_code, error_msg)
-
-        # Extract text from nested structure
-        try:
-            candidates = data.get("candidates")
-            if not candidates:
-                raise GeminiEmptyResponseError("No candidates returned from Gemini")
-
-            content = candidates[0].get("content")
-            if not content:
-                raise GeminiResponseParseError("Missing 'content' in response")
-
-            parts = content.get("parts")
-            if not parts:
-                raise GeminiResponseParseError("Missing 'parts' in response")
-
-            text = parts[0].get("text")
-            if text is None:
-                raise GeminiResponseParseError("Missing 'text' in parts")
-            
-            if not text.strip():
-                raise GeminiEmptyResponseError("Gemini returned empty text")
-
-            return text.strip()
-
-        except GeminiError:
-            # Re-raise our typed errors unchanged
-            raise
-
-        except (KeyError, IndexError, TypeError) as exc:
-            logger.error("Failed to parse Gemini response: %s", data)
-            raise GeminiResponseParseError(
-                f"Invalid response structure: {type(exc).__name__}"
-            ) from exc
+gemini_adapter = GeminiAdapter()

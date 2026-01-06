@@ -18,7 +18,7 @@ async def upload_resume(
 
     job_id = str(uuid.uuid4())
 
-    background_tasks.add_task(process_resume_task, job_id, file)
+    background_tasks.add_task(process_resume_task, job_id, file, "guest_user")
 
     return {
         "job_id": job_id,
