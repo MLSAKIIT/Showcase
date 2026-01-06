@@ -26,7 +26,7 @@ class Job(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     error_message = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)  # Additional job metadata
+    extra_metadata = Column(JSON, nullable=True)  # Fixed: Renamed from metadata
 
     # Relationships
     artifacts = relationship("Artifact", back_populates="job", cascade="all, delete-orphan")
@@ -44,7 +44,7 @@ class Artifact(Base):
     file_path = Column(String(500), nullable=False)
     file_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True) # Fixed: Renamed from metadata
 
     # Relationships
     job = relationship("Job", back_populates="artifacts")
@@ -75,9 +75,7 @@ class ChatMessage(Base):
     role = Column(String(20), nullable=False)  # "user", "assistant", "system"
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True) # Fixed: Renamed from metadata
 
     # Relationships
     job = relationship("Job", back_populates="chat_messages")
-
-
