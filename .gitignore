@@ -6,6 +6,9 @@ dist/
 wheels/
 *.egg-info/
 
+# uv 
+uv.lock
+
 # Virtual environments
 .venv
 venv/
@@ -50,3 +53,4 @@ bundle.zip
 # OS
 .DS_Store
 Thumbs.db
+
