@@ -1,102 +1,52 @@
-"""
-Celery background tasks for pipeline processing.
-"""
-import os
-from celery import Celery
-from sqlalchemy.orm import Session
+import logging
+import time
+from sqlmodel import Session
+from app.adapters.database import engine
+from app.models.portfolio import Portfolio
+from app.services.ocr_service import ocr_service
+from app.services.ai_service import ai_service
+from fastapi import UploadFile
 
-from app.database import SessionLocal
-from app.models import Job, JobStatus, Artifact, Resume, ChatMessage
-from app.ai_pipeline import process_resume_pipeline
-from app.ai_providers.gemini_adapter import GeminiAdapter
+logger = logging.getLogger(__name__)
 
-# Celery configuration
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-celery_app = Celery("showcase", broker=REDIS_URL, backend=REDIS_URL)
+async def process_resume_task(job_id: str, file: UploadFile, user_id: str):
+   
+    start_time = time.time()
+    logger.info(f"Job {job_id} started for User {user_id}")
 
+    with Session(engine) as db:
+        try:
+            logger.info(f"Starting OCR for Job: {job_id}")
+            raw_text = await ocr_service.extract_text(file)
+            
+            logger.info(f"Calling AI Agents for Job: {job_id}")
+            portfolio_json = await ai_service.generate_portfolio_content(raw_text)
+            
+            if not isinstance(portfolio_json, dict) or "hero" not in portfolio_json:
+                raise ValueError(f"AI service returned invalid or incomplete portfolio format for Job {job_id}")
 
-@celery_app.task(name="process_resume_task")
-def process_resume_task(job_id: int):
-    """
-    Main pipeline task: OCR -> Structured JSON -> Gemini passes -> Validation -> Frontend generation.
-    """
-    db: Session = SessionLocal()
-    try:
-        job = db.query(Job).filter(Job.id == job_id).first()
-        if not job:
-            return {"error": "Job not found"}
-
-        job.status = JobStatus.PROCESSING
-        db.commit()
-
-        # Run pipeline
-        result = process_resume_pipeline(job_id, db)
-
-        if result.get("success"):
-            job.status = JobStatus.COMPLETED
-        else:
-            job.status = JobStatus.FAILED
-            job.error_message = result.get("error", "Unknown error")
-
-        db.commit()
-        return {"job_id": job_id, "status": job.status.value, **result}
-
-    except Exception as e:
-        db.rollback()
-        job = db.query(Job).filter(Job.id == job_id).first()
-        if job:
-            job.status = JobStatus.FAILED
-            job.error_message = str(e)
+            new_portfolio = Portfolio(
+                job_id=job_id,
+                user_id=user_id,
+                full_name=portfolio_json.get("hero", {}).get("name", "User"),
+                content=portfolio_json,
+                is_published=False
+            )
+            
+            db.add(new_portfolio)
             db.commit()
-        return {"error": str(e)}
-    finally:
-        db.close()
 
+            db.refresh(new_portfolio)
+            
+            duration = time.time() - start_time
+            logger.info(f"Job {job_id} successfully completed in {duration:.2f}s")
 
-@celery_app.task(name="deploy_to_vercel_task")
-def deploy_to_vercel_task(job_id: int):
-    """
-    Deploy frontend bundle to Vercel.
-    """
-    db: Session = SessionLocal()
-    try:
-        job = db.query(Job).filter(Job.id == job_id).first()
-        if not job:
-            return {"error": "Job not found"}
+        
+        except Exception as e:
+            db.rollback()
+            logger.exception(f"Critical Failure in Job {job_id}: {str(e)}")
+            raise 
 
-        bundle_artifact = db.query(Artifact).filter(
-            Artifact.job_id == job_id,
-            Artifact.artifact_type == "frontend_bundle"
-        ).first()
-
-        if not bundle_artifact:
-            return {"error": "Frontend bundle not found"}
-
-        # TODO: Implement Vercel deployment
-        # - Extract bundle.zip
-        # - Use Vercel API to deploy
-        # - Update artifact with deployment URL
-
-        vercel_token = os.getenv("VERCEL_TOKEN")
-        if not vercel_token:
-            return {"error": "VERCEL_TOKEN not configured"}
-
-        # Placeholder for Vercel deployment
-        deployment_url = f"https://showcase-{job_id}.vercel.app"  # TODO: Actual deployment
-
-        bundle_artifact.file_url = deployment_url
-        bundle_artifact.metadata = {"deployed": True, "deployment_url": deployment_url}
-        db.commit()
-
-        return {
-            "job_id": job_id,
-            "deployment_url": deployment_url,
-            "status": "deployed"
-        }
-
-    except Exception as e:
-        return {"error": str(e)}
-    finally:
-        db.close()
-
-
+        finally:
+            await file.close()
+            logger.debug(f"Temporary file for Job {job_id} closed")
