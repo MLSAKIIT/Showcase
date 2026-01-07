@@ -1,78 +1,188 @@
+"""BUILD_ENGINE.PY - Minimal static website builder"""
+
 import os
 import json
+import logging
+from pathlib import Path
+from datetime import datetime
 from typing import Dict, Any
 
-TEMPLATE_DIR = "templates"
-BUILD_DIR = "builds"
+logger = logging.getLogger("build_engine")
+logger.setLevel(logging.INFO)
+
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+    )
+    logger.addHandler(handler)
+
+
+class BuildError(Exception):
+    """Build engine error."""
+    pass
 
 
 class BuildEngine:
-    """
-    Builds a static website from generated semantic content.
-    """
+    """Minimal static website builder for portfolio content."""
+
+    BUILD_DIR = "builds"
+
+    def __init__(self) -> None:
+        Path(self.BUILD_DIR).mkdir(parents=True, exist_ok=True)
+        logger.info("BuildEngine initialized")
 
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        job = state["job"]
-        content = state["generated_content"]
-        template = state.get("template", "default")
+        """Build static portfolio website."""
+        try:
+            job = state.get("job", {})
+            content = state.get("generated_content")
 
-        output_dir = os.path.join(BUILD_DIR, job["job_id"])
-        os.makedirs(output_dir, exist_ok=True)
+            if not content:
+                raise BuildError("No generated content")
 
-        html = self._render_html(content)
+            job_id = job.get("job_id", "default")
+            output_dir = Path(self.BUILD_DIR) / job_id
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-        index_path = os.path.join(output_dir, "index.html")
-        with open(index_path, "w", encoding="utf-8") as f:
-            f.write(html)
+            # HTML
+            html = self._render_html(content)
+            (output_dir / "index.html").write_text(html, encoding="utf-8")
 
-        # Save metadata
-        with open(os.path.join(output_dir, "content.json"), "w") as f:
-            json.dump(content, f, indent=2)
+            # CSS
+            css = self._generate_css()
+            (output_dir / "style.css").write_text(css, encoding="utf-8")
 
-        state["build"] = {
-            "output_dir": output_dir,
-            "entrypoint": index_path
-        }
+            # Content snapshot
+            (output_dir / "content.json").write_text(
+                json.dumps(content, indent=2, ensure_ascii=False),
+                encoding="utf-8"
+            )
 
-        return state
+            state["build"] = {
+                "output_dir": str(output_dir),
+                "entrypoint": str(output_dir / "index.html"),
+                "status": "success",
+                "generated_at": datetime.utcnow().isoformat() + "Z"
+            }
+
+            logger.info(f"✓ Build complete: {output_dir}")
+            return state
+
+        except Exception as e:
+            logger.exception("Build failed")
+            raise BuildError(f"Build failed: {e}") from e
 
     def _render_html(self, content: Dict[str, Any]) -> str:
-        hero = content["hero"]
-        bio = content["bio"]
+        """Render semantic HTML5."""
+        hero = content.get("hero", {})
+        bio = content.get("bio", "")
+        skills = content.get("skills", [])
         projects = content.get("projects", [])
 
-        project_html = "".join(
-            f"<li><strong>{p['title']}</strong>: {p['description']}</li>"
+        skills_html = "".join(
+            f'<span class="skill">{self._escape(s)}</span>' for s in skills
+        )
+
+        projects_html = "".join(
+            f"<article>"
+            f"<h3>{self._escape(p.get('title', ''))}</h3>"
+            f"<p>{self._escape(p.get('description', ''))}</p>"
+            f"</article>"
             for p in projects
         )
 
-        return f"""
-<!DOCTYPE html>
+        return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <title>{hero['name']} | Portfolio</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{self._escape(hero.get('name', 'Portfolio'))}</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>{hero['name']}</h1>
-    <p>{hero['tagline']}</p>
-  </header>
+  <div class="container">
+    <header class="hero">
+      <h1>{self._escape(hero.get('name', ''))}</h1>
+      <p>{self._escape(hero.get('tagline', ''))}</p>
+    </header>
 
-  <section>
-    <h2>About</h2>
-    <p>{bio}</p>
-  </section>
+    {f"<section><h2>About</h2><p>{self._escape(bio)}</p></section>" if bio else ""}
 
-  <section>
-    <h2>Projects</h2>
-    <ul>{project_html}</ul>
-  </section>
+    {f"<section><h2>Skills</h2><div class='skills'>{skills_html}</div></section>" if skills else ""}
+
+    {f"<section><h2>Projects</h2><div class='projects'>{projects_html}</div></section>" if projects else ""}
+
+    <footer>
+      <p>Generated by Showcase AI • {datetime.utcnow().strftime("%Y-%m-%d")}</p>
+    </footer>
+  </div>
 </body>
-</html>
-<<<<<<< HEAD
+</html>"""
+
+    def _generate_css(self) -> str:
+        """Generate minimal responsive CSS."""
+        return """
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background: #f8f9fa;
+}
+.container { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+.hero {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 60px 20px;
+  text-align: center;
+  margin-bottom: 30px;
+  border-radius: 8px;
+}
+
+.hero h1 { font-size: 2.5em; margin-bottom: 10px; }
+.hero p { font-size: 1.1em; opacity: 0.95; }
+
+section {
+  background: white;
+  padding: 30px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.skills { display: flex; flex-wrap: wrap; gap: 10px; }
+.skill {
+  background: #667eea;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9em;
+}
+
+.projects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+footer { text-align: center; padding: 20px; color: #999; }
+
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.8em; }
+  .projects { grid-template-columns: 1fr; }
+}
 """
-=======
-"""
->>>>>>> 1e6abe464a5baebe118a48d62818195d91f563e5
+
+    @staticmethod
+    def _escape(text: str) -> str:
+        """Escape HTML special characters."""
+        return (
+            str(text or "")
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#39;")
+        )

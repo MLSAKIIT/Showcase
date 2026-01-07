@@ -28,8 +28,3 @@ class DeployHandler:
         - Netlify API
         - S3 + CloudFront
         """
-<<<<<<< HEAD
-        return f"https://deploy.example.com/{job_id}"
-=======
-        return f"https://deploy.example.com/{job_id}"
->>>>>>> 1e6abe464a5baebe118a48d62818195d91f563e5
