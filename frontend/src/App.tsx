@@ -15,6 +15,7 @@ import Discover from "./pages/Discover";
 import Enterprise from "./pages/Enterprise";
 import Editor from "./pages/Editor";
 import NotFound from "./pages/NotFound";
+import GitHubCallback from "./pages/auth/github/callback";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +37,8 @@ const App = () => (
           <Route path="/discover" element={<Discover />} />
           <Route path="/enterprise" element={<Enterprise />} />
           <Route path="/editor" element={<Editor />} />
+          {/* GitHub OAuth callback route */}
+          <Route path="/auth/github/callback" element={<GitHubCallback />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
