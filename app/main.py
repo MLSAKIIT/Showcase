@@ -9,28 +9,22 @@ from app.core.config import settings
 from app.adapters.database import engine, Base
 from app.models.portfolio import Portfolio 
 
+# --- YOUR SOUL INJECTION START ---
+from app.chat import router as chat_router 
+# --- YOUR SOUL INJECTION END ---
+
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
     """
     Application lifespan handler.
-
-    Responsibilities:
-    - Create DB tables at startup (DEV MODE)
-    - Dispose DB engine on shutdown
     """
-
     logger.info("Showcase AI: Application starting up")
-
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
     yield
-
     logger.info("Showcase AI: Application shutting down")
-
     await engine.dispose()
 
 app = FastAPI(
@@ -49,7 +43,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Team's original routes
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# --- YOUR SOUL INJECTION START ---
+app.include_router(chat_router, prefix="/api/v1/chat")
+# --- YOUR SOUL INJECTION END ---
 
 @app.get("/health", include_in_schema=False)
 async def health_check():
