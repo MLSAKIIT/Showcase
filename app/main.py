@@ -7,7 +7,8 @@ from sqlmodel import SQLModel
 from app.api.routes import api_router
 from app.core.config import settings
 from app.adapters.database import engine
-from app.models.portfolio import Portfolio 
+from app.models.portfolio import Portfolio
+from app.models.user import User  # GitHub OAuth user model
 
 # --- YOUR SOUL INJECTION START ---
 from app.chat import router as chat_router 

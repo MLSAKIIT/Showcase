@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     GEMINI_VISION_MODEL: str = os.getenv("GEMINI_VISION_MODEL", "gemini-1.5-flash")
     GEMINI_AGENT_MODEL: str = os.getenv("GEMINI_AGENT_MODEL", "gemini-1.5-pro")
 
+    # GitHub OAuth Settings
+    GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")
+    GITHUB_CLIENT_SECRET: str = os.getenv("GITHUB_CLIENT_SECRET", "")
+
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = Field(default_factory=list)
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)
