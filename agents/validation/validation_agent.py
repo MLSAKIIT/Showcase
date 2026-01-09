@@ -1,31 +1,28 @@
-import logging
 import re
-from typing import Dict, Any, List
+from typing import List
 
-logger = logging.getLogger(__name__)
+from agents.schemas.portfolio import PortfolioOutput
 
 
 class ValidationError(Exception):
     pass
 
 
-class ValidationAgent:
+class PortfolioValidator:
     """
-    Production-grade validation agent.
+    Validates PortfolioOutput beyond Pydantic structural checks.
 
-    Responsibilities:
-    - Validate generated portfolio content
-    - Ensure consistency with original resume data
-    - Compute deterministic quality scores
-    - Decide pass / fail (NO silent fixing)
+    Focus:
+    - Content quality
+    - Reasonable length / tone
+    - Placeholder detection
+    - Deterministic scoring
+
+    Pydantic already guarantees:
+    - Required fields
+    - Min/max lengths
+    - Types
     """
-
-    # Thresholds
-    MIN_TAGLINE_WORDS = 6
-    MAX_TAGLINE_WORDS = 18
-    MIN_BIO_WORDS = 120
-    MAX_BIO_WORDS = 280
-    MIN_PROJECT_DESC_WORDS = 40
 
     PASS_SCORE = 0.70
 
@@ -38,186 +35,104 @@ class ValidationAgent:
         r"your (name|project|company)",
     ]
 
-    def __init__(self, strict: bool = False):
-        self.strict = strict
+    def validate_and_enhance(
+        self,
+        portfolio: PortfolioOutput,
+        original_data: dict | None = None,
+    ) -> dict:
+        """
+        Validate generated portfolio and attach validation metadata.
+        """
 
-    async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        portfolio = state.get("generated_content")
-        original = state.get("clean_data")
+        hero_score = self._validate_hero(portfolio.hero)
+        bio_score = self._validate_bio(portfolio.bio_long)
+        project_score = self._validate_projects(portfolio.projects)
 
-        if not portfolio or not original:
-            raise ValidationError("Missing data for validation")
+        overall = (
+            hero_score * 0.25 +
+            bio_score * 0.35 +
+            project_score * 0.40
+        )
 
-        results = {
-            "hero": self._validate_hero(portfolio.get("hero", {})),
-            "bio": self._validate_bio(portfolio.get("bio", "")),
-            "projects": self._validate_projects(portfolio.get("projects", [])),
+        passed = overall >= self.PASS_SCORE
+
+        result = portfolio.model_dump()
+
+        result["quality_score"] = round(overall, 3)
+        result["validation"] = {
+            "hero_score": round(hero_score, 3),
+            "bio_score": round(bio_score, 3),
+            "projects_score": round(project_score, 3),
+            "passed": passed,
         }
 
-        overall_score = self._overall_score(results)
-
-        results["overall"] = {
-            "score": round(overall_score, 3),
-            "passed": overall_score >= self.PASS_SCORE,
-        }
-
-        consistency = self._check_consistency(portfolio, original)
-        if consistency:
-            results["consistency_warnings"] = consistency
-
-        portfolio["validation"] = results
-
-        if self.strict and not results["overall"]["passed"]:
+        if not passed:
             raise ValidationError(
-                f"Portfolio validation failed (score={overall_score:.2f})"
+                f"Portfolio quality below threshold ({overall:.2f})"
             )
 
-        state["validated"] = results["overall"]["passed"]
-        return state
+        return result
 
-    # ---------------- HERO ---------------- #
+    # SECTION VALIDATORS
 
-    def _validate_hero(self, hero: Dict[str, Any]) -> Dict[str, Any]:
-        issues = []
+    def _validate_hero(self, hero) -> float:
         score = 1.0
 
-        tagline = hero.get("tagline", "").strip()
-        wc = len(tagline.split())
-
-        if wc < self.MIN_TAGLINE_WORDS:
-            issues.append("Tagline too short")
-            score -= 0.3
-        elif wc > self.MAX_TAGLINE_WORDS:
-            issues.append("Tagline too long")
-            score -= 0.2
-
-        if not hero.get("name"):
-            issues.append("Missing name")
+        wc = len(hero.tagline.split())
+        if wc < 6 or wc > 18:
             score -= 0.3
 
-        if self._has_placeholders(tagline):
-            issues.append("Contains placeholder text")
-            score -= 0.5
+        if self._has_placeholders(hero.tagline):
+            score -= 0.4
 
-        return self._finalize(score, issues)
-
-    # ---------------- BIO ---------------- #
-
-    def _validate_bio(self, bio: str) -> Dict[str, Any]:
-        issues = []
-        score = 1.0
-
-        wc = len(bio.split())
-
-        if wc < self.MIN_BIO_WORDS:
-            issues.append("Bio too short")
-            score -= 0.3
-        elif wc > self.MAX_BIO_WORDS:
-            issues.append("Bio too long")
+        if hero.bio_short and len(hero.bio_short.split()) < 20:
             score -= 0.1
 
+        return max(score, 0.0)
+
+    def _validate_bio(self, bio: str) -> float:
+        score = 1.0
+
         if self._has_placeholders(bio):
-            issues.append("Contains placeholder text")
-            score -= 0.5
+            score -= 0.4
 
         if not self._is_first_person(bio):
-            issues.append("Not written in first person")
             score -= 0.2
 
         if self._is_repetitive(bio):
-            issues.append("Repetitive phrasing detected")
             score -= 0.1
 
-        return self._finalize(score, issues)
+        return max(score, 0.0)
 
-    # ---------------- PROJECTS ---------------- #
-
-    def _validate_projects(self, projects: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _validate_projects(self, projects: List) -> float:
         if not projects:
-            return self._finalize(0.4, ["No projects provided"])
+            return 0.4
 
         scores = []
-        issues = []
 
-        for i, project in enumerate(projects):
-            res = self._validate_project(project)
-            scores.append(res["score"])
-            if not res["passed"]:
-                issues.extend([f"Project {i}: {e}" for e in res["issues"]])
+        for p in projects:
+            s = 1.0
 
-        avg_score = sum(scores) / len(scores)
-        return self._finalize(avg_score, issues)
+            if self._has_placeholders(p.description):
+                s -= 0.4
 
-    def _validate_project(self, project: Dict[str, Any]) -> Dict[str, Any]:
-        issues = []
-        score = 1.0
+            if not p.tech_stack:
+                s -= 0.1
 
-        desc = project.get("description", "")
-        wc = len(desc.split())
+            scores.append(max(s, 0.0))
 
-        if not project.get("title"):
-            issues.append("Missing title")
-            score -= 0.3
+        return sum(scores) / len(scores)
 
-        if wc < self.MIN_PROJECT_DESC_WORDS:
-            issues.append("Description too short")
-            score -= 0.3
-
-        if self._has_placeholders(desc):
-            issues.append("Contains placeholder text")
-            score -= 0.5
-
-        if not project.get("technologies"):
-            issues.append("Missing tech stack")
-            score -= 0.1
-
-        return self._finalize(score, issues)
-
-    # ---------------- HELPERS ---------------- #
-
-    def _finalize(self, score: float, issues: List[str]) -> Dict[str, Any]:
-        score = max(0.0, min(score, 1.0))
-        return {
-            "score": round(score, 3),
-            "passed": score >= 0.6,
-            "issues": issues,
-        }
-
-    def _overall_score(self, results: Dict[str, Any]) -> float:
-        weights = {"hero": 0.25, "bio": 0.35, "projects": 0.40}
-        return sum(results[k]["score"] * w for k, w in weights.items())
+    # HELPERS
 
     def _has_placeholders(self, text: str) -> bool:
         text = text.lower()
         return any(re.search(p, text) for p in self.PLACEHOLDER_PATTERNS)
 
     def _is_first_person(self, text: str) -> bool:
-        return any(p in text.lower() for p in [" i ", " my ", " i'm ", " i've "])
+        t = text.lower()
+        return any(p in t for p in [" i ", " my ", " i'm ", " i've "])
 
     def _is_repetitive(self, text: str) -> bool:
         sentences = [s.strip().lower() for s in text.split(".") if s.strip()]
         return len(sentences) != len(set(sentences))
-
-    def _check_consistency(
-        self, portfolio: Dict[str, Any], original: Dict[str, Any]
-    ) -> List[str]:
-        warnings = []
-
-        if portfolio.get("hero", {}).get("name") != original.get("name"):
-            warnings.append("Hero name does not match original data")
-
-        original_skills = set(s.lower() for s in original.get("skills", []))
-        bio = portfolio.get("bio", "").lower()
-
-        hallucinated = [
-            word for word in re.findall(r"\b[a-zA-Z]{4,}\b", bio)
-            if word not in original_skills
-        ]
-
-        if len(hallucinated) > 15:
-            warnings.append("Possible skill hallucination in bio")
-
-        if len(portfolio.get("projects", [])) > len(original.get("projects", [])):
-            warnings.append("Generated more projects than provided")
-
-        return warnings
