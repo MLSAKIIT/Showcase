@@ -14,7 +14,10 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/showcase")
 
-    SECRET_KEY: str = Field(...)
+    SECRET_KEY: str = Field(
+        default_factory=lambda: os.getenv("SECRET_KEY", "dev-secret-key-change-in-production"),
+        description="Secret key for JWT tokens. Must be set in production!"
+    )
 
     FIREBASE_SERVICE_ACCOUNT_PATH: str = os.getenv(
         "FIREBASE_SERVICE_ACCOUNT_PATH", 

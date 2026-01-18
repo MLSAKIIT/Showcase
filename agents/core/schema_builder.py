@@ -6,20 +6,40 @@ Transforms parsed resume data into structured portfolio schema.
 
 import logging
 from typing import Dict, Any
+from agno.agent import Agent
+from agno.run import RunContext
 
 logger = logging.getLogger(__name__)
 
 
-class SchemaBuilder:
+class SchemaBuilderAgent(Agent):
     """
     Builds portfolio schema from preprocessed profile data.
-
+    
     INPUT:
         - profile: dict with name, role, skills, experience_years, projects
 
     OUTPUT:
         - schema: dict with sections and layout hints
     """
+    name = "schema_builder_agent"
+
+    def __init__(self):
+        super().__init__()
+
+    async def run(self, ctx: RunContext):
+        """
+        Executes the schema building logic.
+        """
+        profile = ctx.state.get("profile")
+        
+        # Validation is handled in build_schema, but we can check existence here
+        if profile is None:
+             raise ValueError("SchemaBuilder: `profile` missing in state")
+
+        schema = await self.build_schema(profile)
+        ctx.state["schema"] = schema
+        return schema
 
     async def build_schema(self, profile: Dict[str, Any]) -> Dict[str, Any]:
         """

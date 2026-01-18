@@ -12,23 +12,35 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # Load environment variables
 load_dotenv()
 
-# Import models
-from app.database import Base
-from app.models import Job, Artifact, Resume, ChatMessage  # noqa
+# Import models - must import all models so Alembic can detect them
+from sqlmodel import SQLModel
+from app.models.portfolio import Portfolio
+from app.models.user import User
+from app.models.chat_message import ChatMessage
+from app.models.job import Job
 
 # this is the Alembic Config object
 config = context.config
 
 # Override sqlalchemy.url from environment
 database_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/showcase_db")
-config.set_main_option("sqlalchemy.url", database_url)
+# Escape % for ConfigParser (URLs with encoded passwords like %40 for @ need double %%)
+escaped_url = database_url.replace("%", "%%") if "%" in database_url else database_url
+config.set_main_option("sqlalchemy.url", escaped_url)
 
 # Interpret the config file for Python logging.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+# Skip fileConfig if logging is already configured or if config file has issues
+try:
+    if config.config_file_name is not None:
+        fileConfig(config.config_file_name)
+except Exception:
+    # If logging config fails, use basic logging instead
+    import logging
+    logging.basicConfig(level=logging.INFO)
 
 # add your model's MetaData object here
-target_metadata = Base.metadata
+# SQLModel uses SQLAlchemy metadata
+target_metadata = SQLModel.metadata
 
 
 def run_migrations_offline() -> None:

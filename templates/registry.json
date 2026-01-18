@@ -1,102 +1,120 @@
 {
-  "one_temp": {
-    "id": "one_temp",
-    "name": "Modern Vite Portfolio",
-    "framework": "react-vite",
-    "language": "typescript",
-    "type": "single-page",
-    "entry": "main.tsx",
-    "path": "one_temp",
-    "features": ["animations", "sections", "projects", "skills"]
+  "templates": [
+    {
+      "id": "one_temp",
+      "name": "Modern Vite Portfolio",
+      "framework": "react-vite",
+      "language": "typescript",
+      "type": "single-page",
+      "entry": "main.tsx",
+      "path": "one_temp",
+      "features": ["animations", "sections", "projects", "skills"]
+    },
+    {
+      "id": "two_temp",
+      "name": "Classic Multi-Page React Portfolio",
+      "framework": "react",
+      "language": "typescript",
+      "type": "multi-page",
+      "entry": "index.tsx",
+      "path": "two_temp",
+      "pages": ["Home", "About", "Resume", "Contact"]
+    },
+    {
+      "id": "three_temp",
+      "name": "Next.js Blog Portfolio",
+      "framework": "nextjs-pages",
+      "language": "javascript",
+      "type": "blog-portfolio",
+      "entry": "pages/index.js",
+      "path": "three_temp",
+      "features": ["blog", "projects", "experience"]
+    },
+    {
+      "id": "four_temp",
+      "name": "Creative React Portfolio",
+      "framework": "react-cra",
+      "language": "javascript",
+      "type": "single-page",
+      "entry": "index.js",
+      "path": "four_temp",
+      "features": ["visual-heavy", "animations"]
+    },
+    {
+      "id": "five_temp",
+      "name": "Minimal Next.js Portfolio",
+      "framework": "nextjs-pages",
+      "language": "javascript",
+      "type": "multi-page",
+      "entry": "pages/index.js",
+      "path": "five_temp",
+      "pages": ["index"]
+    },
+    {
+      "id": "six_temp",
+      "name": "Professional Next.js Resume Portfolio",
+      "framework": "nextjs-pages",
+      "language": "typescript",
+      "type": "multi-page",
+      "entry": "pages/index.tsx",
+      "path": "six_temp",
+      "features": ["resume", "timeline", "portfolio"]
+    },
+    {
+      "id": "seven_temp",
+      "name": "Terminal Style Portfolio",
+      "framework": "react-vite",
+      "language": "typescript",
+      "type": "single-page",
+      "entry": "main.tsx",
+      "path": "seven_temp",
+      "features": ["terminal-ui", "commands"]
+    },
+    {
+      "id": "eight_temp",
+      "name": "Advanced Animated Portfolio",
+      "framework": "react",
+      "language": "javascript",
+      "type": "single-page",
+      "entry": "app/app.js",
+      "path": "eight_temp",
+      "features": ["animations", "timeline", "projects"]
+    },
+    {
+      "id": "nine_temp",
+      "name": "Developer Portfolio (CRA)",
+      "framework": "react-cra",
+      "language": "javascript",
+      "type": "single-page",
+      "entry": "index.js",
+      "path": "nine_temp",
+      "features": ["projects", "resume", "skills"]
+    },
+    {
+      "id": "ten_temp",
+      "name": "Modern Next.js App Router Portfolio",
+      "framework": "nextjs-app",
+      "language": "typescript",
+      "type": "multi-page",
+      "entry": "app/page.tsx",
+      "path": "ten_temp",
+      "features": ["blog", "projects", "work"]
+    }
+  ],
+  "selectionCriteria": {
+    "byRole": {
+      "developer": ["one_temp", "seven_temp", "nine_temp"],
+      "designer": ["four_temp", "eight_temp"],
+      "full-stack": ["two_temp", "six_temp"],
+      "writer": ["three_temp", "ten_temp"]
+    },
+    "byIndustry": {
+      "tech": ["one_temp", "seven_temp"],
+      "creative": ["four_temp", "eight_temp"],
+      "business": ["two_temp", "six_temp"]
+    }
   },
-  "two_temp": {
-    "id": "two_temp",
-    "name": "Classic Multi-Page React Portfolio",
-    "framework": "react",
-    "language": "typescript",
-    "type": "multi-page",
-    "entry": "index.tsx",
-    "path": "two_temp",
-    "pages": ["Home", "About", "Resume", "Contact"]
-  },
-  "three_temp": {
-    "id": "three_temp",
-    "name": "Next.js Blog Portfolio",
-    "framework": "nextjs-pages",
-    "language": "javascript",
-    "type": "blog-portfolio",
-    "entry": "pages/index.js",
-    "path": "three_temp",
-    "features": ["blog", "projects", "experience"]
-  },
-  "four_temp": {
-    "id": "four_temp",
-    "name": "Creative React Portfolio",
-    "framework": "react-cra",
-    "language": "javascript",
-    "type": "single-page",
-    "entry": "index.js",
-    "path": "four_temp",
-    "features": ["visual-heavy", "animations"]
-  },
-  "five_temp": {
-    "id": "five_temp",
-    "name": "Minimal Next.js Portfolio",
-    "framework": "nextjs-pages",
-    "language": "javascript",
-    "type": "multi-page",
-    "entry": "pages/index.js",
-    "path": "five_temp",
-    "pages": ["index"]
-  },
-  "six_temp": {
-    "id": "six_temp",
-    "name": "Professional Next.js Resume Portfolio",
-    "framework": "nextjs-pages",
-    "language": "typescript",
-    "type": "multi-page",
-    "entry": "pages/index.tsx",
-    "path": "six_temp",
-    "features": ["resume", "timeline", "portfolio"]
-  },
-  "seven_temp": {
-    "id": "seven_temp",
-    "name": "Terminal Style Portfolio",
-    "framework": "react-vite",
-    "language": "typescript",
-    "type": "single-page",
-    "entry": "main.tsx",
-    "path": "seven_temp",
-    "features": ["terminal-ui", "commands"]
-  },
-  "eight_temp": {
-    "id": "eight_temp",
-    "name": "Advanced Animated Portfolio",
-    "framework": "react",
-    "language": "javascript",
-    "type": "single-page",
-    "entry": "app/app.js",
-    "path": "eight_temp",
-    "features": ["animations", "timeline", "projects"]
-  },
-  "nine_temp": {
-    "id": "nine_temp",
-    "name": "Developer Portfolio (CRA)",
-    "framework": "react-cra",
-    "language": "javascript",
-    "type": "single-page",
-    "entry": "index.js",
-    "path": "nine_temp",
-    "features": ["projects", "resume", "skills"]
-  },
-  "ten_temp": {
-    "id": "ten_temp",
-    "name": "Modern Next.js App Router Portfolio",
-    "framework": "nextjs-app",
-    "language": "typescript",
-    "type": "multi-page",
-    "entry": "app/page.tsx",
-    "path": "ten_temp",
-    "features": ["blog", "projects", "work"]
+  "aiSelectionGuidelines": {
+    "fallback": "one_temp"
   }
 }

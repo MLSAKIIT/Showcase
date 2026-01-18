@@ -28,12 +28,16 @@ class GeminiAdapter:
         TODO: Implement actual Gemini API call using google-generativeai.
         """
         if self.api_key and self.api_key != "your_gemini_api_key_here":
-            # TODO: Implement actual API call
-            # import google.generativeai as genai
-            # genai.configure(api_key=self.api_key)
-            # model = genai.GenerativeModel('gemini-pro')
-            # response = model.generate_content(prompt)
-            # return response.text
+            # TODO: Implement actual API call using new google.genai package
+            # import google.genai as genai
+            # from google.genai import types
+            # client = genai.Client(api_key=self.api_key)
+            # contents = [types.Part.from_text(prompt)]
+            # response = await client.aio.models.generate_content(
+            #     model="gemini-1.5-pro",
+            #     contents=contents
+            # )
+            # return response.candidates[0].content.parts[0].text
             pass
         
         # Mock deterministic response for testing

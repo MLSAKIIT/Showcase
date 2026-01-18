@@ -54,7 +54,7 @@ Validation & Auto-fix → Preview / Download / Vercel Deploy
 - **Tailwind CSS** - Utility-first CSS framework
 
 ### AI & Processing
-- **Google Gemini** - State-of-the-art LLM for content generation
+- **Google GenAI SDK** - State-of-the-art LLM for content generation (v0.2.0+)
 - **Hugging Face OCR Models** - Advanced OCR models for text extraction (primary)
 - **Pytesseract** - OCR engine fallback for local processing
 - **Agno Agents** - Intelligent orchestration framework
@@ -115,9 +115,6 @@ pip install -e .
 
 **Install Frontend Dependencies:**
 ```bash
-# Install frontend generator dependencies
-cd frontend_generator && npm install && cd ..
-
 # Install frontend dependencies
 make install-frontend
 # Or: cd frontend && npm install && cd ..
@@ -168,8 +165,8 @@ make run-frontend
 
 **Terminal 4 - (Optional) Agent:**
 ```bash
-make run-agent <resume_file.pdf>
-# Or use the web UI instead
+make run-agent
+# Or: python agents/agno_app.py
 ```
 
 ### 6️⃣ Access the Application
@@ -231,7 +228,9 @@ curl -X POST http://localhost:8000/api/v1/jobs/1/deploy
 ### Using the Agent Script
 
 ```bash
-python agents/pipeline_agent.py path/to/resume.pdf --deploy
+```bash
+python agents/agno_app.py
+```
 ```
 
 ---
@@ -252,10 +251,8 @@ showcase/
 │   ├── src/
 │   │   ├── components/           # React components
 │   │   └── api/                  # API client
-├── frontend_generator/           # Portfolio generator
-│   └── generate.js               # Next.js bundle generator
 ├── agents/                       # Agent orchestration
-│   └── pipeline_agent.py         # Pipeline agent example
+│   └── agno_app.py               # Main agent application
 ├── alembic/                     # Database migrations
 └── docker-compose.yml            # Infrastructure setup
 ```
@@ -464,11 +461,31 @@ Built with ❤️ by the Microsoft Learn Student Ambassadors community at KIIT U
 
 ---
 
-## 📞 Support
+## � Contributors
 
-- 📧 **Email**: [Your Email]
-- 💬 **Discord**: [Your Discord Server]
-- 🐛 **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
+### 🎯 Project Leadership
+
+| Role | Name |
+|------|------|
+| **Project Lead** | Kartikeya Trivedi |
+| **Co-Project Lead** | Souryabrata Goswami |
+
+### 🤖 List of Contributors
+
+| Name | Roll Number |
+|------|-------------|
+| Arka Banerjee | 25155119 |
+| Abdeali Badri | 25155229 |
+| Samadrita Ghosh | 2504106 |
+| Divyanka Agarwal | 25156085 |
+| Devansh Soni | 2405348 |
+| Prayash Mohanty | 24155192 |
+| Soumyadeep Dutta | 24051355 |
+| Ujjwal Pandey | 23053563 |
+| Hitesh Singh | 24155247 |
+
+---
+
 
 ---
 

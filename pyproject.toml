@@ -16,11 +16,9 @@ dependencies = [
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
     "python-dotenv>=1.0.0",
-    "pytesseract>=0.3.10",
-    "pillow>=10.1.0",
-    "pdf2image>=1.16.3",
+    "pymupdf>=1.23.0",
     "python-docx>=1.1.0",
-    "google-generativeai>=0.3.0",
+    "google-genai>=0.2.0",
     "aiofiles>=23.2.0",
     "sqlmodel>=0.0.31",
     "httpx>=0.28.1",
@@ -29,6 +27,8 @@ dependencies = [
     "firebase-admin>=7.1.0",
     "jose>=1.0.0",
     "python-jose[cryptography]>=3.5.0",
+    "pytest>=9.0.2",
+    "agno>=2.3.24",
 ]
 
 [build-system]

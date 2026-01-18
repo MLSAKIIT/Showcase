@@ -38,13 +38,13 @@ import os
 import hashlib
 from functools import wraps
 
-# Google Generative AI
+# Google Generative AI (new google.genai package)
 try:
-    import google.generativeai as genai
-    from google.generativeai.types import HarmCategory, HarmBlockThreshold
+    import google.genai as genai
+    from google.genai import types
 except ImportError:
     raise ImportError(
-        "google-generativeai not installed. Install with: pip install google-generativeai"
+        "google-genai not installed. Install with: pip install google-genai"
     )
 
 # Retry logic
@@ -409,42 +409,60 @@ class ContentGenerator:
                 "GEMINI_API_KEY not found. Set it as environment variable or in config."
             )
         
-        # Configure Gemini
+        # Initialize Gemini Client (new google.genai API)
         try:
-            genai.configure(api_key=self.api_key)
+            self.client = genai.Client(api_key=self.api_key)
         except Exception as e:
-            raise GenerationError(f"Failed to configure Gemini: {str(e)}") from e
+            raise GenerationError(f"Failed to initialize Gemini client: {str(e)}") from e
         
-        # Safety settings
+        # Safety settings (new API uses types.SafetySetting)
         if self.config.block_none_harmful:
-            self.safety_settings = {
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            }
-        else:
-            self.safety_settings = {
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-            }
-        
-        # Initialize model
-        try:
-            self.model = genai.GenerativeModel(
-                model_name=self.config.model_name,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=self.config.temperature,
-                    top_p=self.config.top_p,
-                    top_k=self.config.top_k,
-                    max_output_tokens=self.config.max_output_tokens,
+            self.safety_settings = [
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
                 ),
-                safety_settings=self.safety_settings
-            )
-        except Exception as e:
-            raise GenerationError(f"Failed to initialize model: {str(e)}") from e
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+                ),
+            ]
+        else:
+            self.safety_settings = [
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE
+                ),
+            ]
+        
+        # Store model name and config for use in generation
+        self.model_name = self.config.model_name
+        self.generation_config = types.GenerationConfig(
+            temperature=self.config.temperature,
+            top_p=self.config.top_p,
+            top_k=self.config.top_k,
+            max_output_tokens=self.config.max_output_tokens,
+        )
         
         # Initialize components
         self.validator = ContentValidator()
@@ -461,6 +479,48 @@ class ContentGenerator:
             self.config.model_name,
             self.config.temperature
         )
+    
+    async def _generate_content_async(self, prompt: str) -> str:
+        """
+        Helper method to generate content using the new google.genai API.
+        
+        Args:
+            prompt: Text prompt to send to the model
+            
+        Returns:
+            Generated text as string
+            
+        Raises:
+            GenerationError: If generation fails
+        """
+        try:
+            # Create content parts
+            contents = [types.Part.from_text(prompt)]
+            
+            # Generate content using the new API
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+                config=self.generation_config,
+                safety_settings=self.safety_settings
+            )
+            
+            # Extract text from response
+            if not response or not response.candidates:
+                raise GenerationError("No response from Gemini")
+            
+            candidate = response.candidates[0]
+            if not candidate.content or not candidate.content.parts:
+                raise GenerationError("Empty content in response")
+            
+            text_part = candidate.content.parts[0]
+            if not hasattr(text_part, 'text') or not text_part.text:
+                raise GenerationError("No text in response")
+            
+            return text_part.text
+            
+        except Exception as e:
+            raise GenerationError(f"Content generation failed: {str(e)}") from e
     
     async def generate(
         self,
@@ -666,14 +726,14 @@ Return ONLY the tagline text, nothing else."""
         try:
             # Generate with timeout
             response = await asyncio.wait_for(
-                asyncio.to_thread(self.model.generate_content, prompt),
+                self._generate_content_async(prompt),
                 timeout=self.config.generation_timeout
             )
             
-            if not response or not response.text:
+            if not response:
                 raise GenerationError("Empty response from model")
             
-            tagline = response.text.strip().strip('"\'')
+            tagline = response.strip().strip('"\'')
             
             # Clean up common issues
             tagline = self._clean_tagline(tagline)
@@ -848,14 +908,14 @@ Return ONLY the bio paragraph, no formatting, headers, or meta-text."""
         try:
             # Generate with timeout
             response = await asyncio.wait_for(
-                asyncio.to_thread(self.model.generate_content, prompt),
+                self._generate_content_async(prompt),
                 timeout=self.config.generation_timeout
             )
             
-            if not response or not response.text:
+            if not response:
                 raise GenerationError("Empty response from model")
             
-            bio = response.text.strip()
+            bio = response.strip()
             
             # Clean up
             bio = self._clean_bio(bio)
@@ -1082,14 +1142,14 @@ Return ONLY the enhanced description, no additional commentary."""
         try:
             # Generate with timeout
             response = await asyncio.wait_for(
-                asyncio.to_thread(self.model.generate_content, prompt),
+                self._generate_content_async(prompt),
                 timeout=self.config.generation_timeout
             )
             
-            if not response or not response.text:
+            if not response:
                 raise GenerationError("Empty response from model")
             
-            enhanced = response.text.strip()
+            enhanced = response.strip()
             
             # Clean up
             enhanced = self._clean_description(enhanced)
@@ -1218,14 +1278,14 @@ Return ONLY the new tagline."""
         
         try:
             response = await asyncio.wait_for(
-                asyncio.to_thread(self.model.generate_content, prompt),
+                self._generate_content_async(prompt),
                 timeout=self.config.generation_timeout
             )
             
-            if not response or not response.text:
+            if not response:
                 raise GenerationError("Empty response from model")
             
-            new_tagline = self._clean_tagline(response.text.strip())
+            new_tagline = self._clean_tagline(response.strip())
             
             # Validate
             if not self.validator.validate_hero_tagline(new_tagline, self.config):
@@ -1307,14 +1367,14 @@ Return ONLY the rewritten bio."""
         
         try:
             response = await asyncio.wait_for(
-                asyncio.to_thread(self.model.generate_content, prompt),
+                self._generate_content_async(prompt),
                 timeout=self.config.generation_timeout
             )
             
-            if not response or not response.text:
+            if not response:
                 raise GenerationError("Empty response from model")
             
-            new_bio = self._clean_bio(response.text.strip())
+            new_bio = self._clean_bio(response.strip())
             
             # Validate
             if not self.validator.validate_bio(new_bio, self.config):
@@ -1382,14 +1442,14 @@ Return ONLY the new description."""
         
         try:
             response = await asyncio.wait_for(
-                asyncio.to_thread(self.model.generate_content, prompt),
+                self._generate_content_async(prompt),
                 timeout=self.config.generation_timeout
             )
             
-            if not response or not response.text:
+            if not response:
                 raise GenerationError("Empty response from model")
             
-            new_description = self._clean_description(response.text.strip())
+            new_description = self._clean_description(response.strip())
             
             self._generation_count += 1
             
@@ -1417,11 +1477,11 @@ Return ONLY the new description."""
             test_prompt = "Say 'OK' if you can respond."
             
             response = await asyncio.wait_for(
-                asyncio.to_thread(self.model.generate_content, test_prompt),
+                self._generate_content_async(test_prompt),
                 timeout=10.0
             )
             
-            api_status = 'ok' if response and response.text else 'error'
+            api_status = 'ok' if response else 'error'
             
         except Exception as e:
             api_status = 'error'
