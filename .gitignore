@@ -18,6 +18,7 @@ ENV/
 .env
 .env.local
 .env.backup
+
 # IDE
 .vscode/
 .idea/
@@ -27,6 +28,7 @@ ENV/
 # Database
 *.db
 *.sqlite
+test.db
 
 # Uploads and artifacts
 uploads/
@@ -34,6 +36,7 @@ artifacts/
 generated/
 previews/
 bundles/
+output/
 
 # Logs
 *.log
@@ -54,5 +57,13 @@ bundle.zip
 .DS_Store
 Thumbs.db
 
-#firebase
+# Firebase
 firebase-service-account.json
+
+# Test & Coverage
+.coverage
+htmlcov/
+coverage.xml
+.pytest_cache/
+.tox/
+

@@ -63,7 +63,7 @@ run-frontend:
 	cd frontend && npm run dev
 
 run-agent:
-	python agents/pipeline_agent.py
+	python agents/agno_app.py
 
 test:
 	pytest

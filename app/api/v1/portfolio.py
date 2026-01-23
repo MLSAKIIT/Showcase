@@ -1,18 +1,59 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+import json
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 from app.api import dependencies
 from app.core.security import verify_firebase_token
 from app.models.portfolio import Portfolio
 from app.models.job import Job, JobStatus
 from app.schemas.portfolio import PortfolioUpdate
+from app.schemas.responses import APIResponse
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-#PRIVATE ROUTES (Requires Google Login)
+
+# ============================================================================
+# New Schemas for Template/AI Endpoints
+# ============================================================================
+
+class ColorScheme(BaseModel):
+    """Color preferences for template customization."""
+    primary: str = Field(default="#3B82F6", description="Primary brand color")
+    secondary: str = Field(default="#6B7280", description="Secondary color")
+    accent: str = Field(default="#10B981", description="Accent color")
+
+
+class FeatureToggles(BaseModel):
+    """Feature toggles for template customization."""
+    dark_mode: bool = Field(default=True)
+    animations: bool = Field(default=True)
+    contact_form: bool = Field(default=True)
+
+
+class CustomizationRequest(BaseModel):
+    """Request for customizing a portfolio template."""
+    template_id: str
+    colors: Optional[ColorScheme] = None
+    features: Optional[FeatureToggles] = None
+    custom_instructions: Optional[str] = None
+
+
+class ChatRequest(BaseModel):
+    """Chat request for AI customization."""
+    message: str
+    job_id: Optional[str] = None
+    template_id: Optional[str] = None
+
+
+# ============================================================================
+# Existing Portfolio CRUD Endpoints
+# ============================================================================
+
+
 
 @router.get("/me", response_model=List[Portfolio])
 async def get_my_portfolios(
@@ -211,3 +252,130 @@ async def get_public_portfolio(
             }
         )
     return portfolio
+
+
+# ============================================================================
+# New Template & AI Endpoints
+# ============================================================================
+
+@router.get("/templates", response_model=APIResponse)
+async def list_templates():
+    """
+    List all available portfolio templates.
+    """
+    try:
+        from agents.tools.template_tools import TemplateRegistryTools
+        
+        tools = TemplateRegistryTools()
+        templates_json = tools.list_templates()
+        templates = json.loads(templates_json)
+        
+        return APIResponse.success(data={"templates": templates})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/templates/{template_id}", response_model=APIResponse)
+async def get_template(template_id: str):
+    """
+    Get detailed information about a specific template.
+    """
+    try:
+        from agents.tools.template_tools import TemplateRegistryTools
+        
+        tools = TemplateRegistryTools()
+        template_json = tools.get_template(template_id)
+        
+        if "not found" in template_json.lower():
+            raise HTTPException(status_code=404, detail=f"Template not found: {template_id}")
+        
+        template = json.loads(template_json)
+        return APIResponse.success(data=template)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/customize", response_model=APIResponse)
+async def customize_portfolio_template(
+    request: CustomizationRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(dependencies.get_db),
+):
+    """
+    Customize a portfolio template with colors, features, and AI instructions.
+    """
+    try:
+        from agents.tools.file_tools import FileSystemTools
+        
+        file_tools = FileSystemTools()
+        copy_result = file_tools.copy_template(request.template_id)
+        
+        if "Error" in copy_result:
+            raise HTTPException(status_code=400, detail=copy_result)
+        
+        customizations = []
+        if request.colors:
+            customizations.append(f"Colors: {request.colors.primary}")
+        if request.features:
+            customizations.append(f"Dark mode: {request.features.dark_mode}")
+        if request.custom_instructions:
+            customizations.append(f"Custom: {request.custom_instructions}")
+        
+        return APIResponse.success(
+            data={
+                "template_id": request.template_id,
+                "output_path": copy_result,
+                "customizations": customizations,
+                "message": "Template copied. Use /chat for AI customizations.",
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chat", response_model=APIResponse)
+async def chat_with_portfolio_ai(request: ChatRequest):
+    """
+    Chat with the AI for natural language portfolio customization.
+    
+    Send requests like:
+    - "Make it dark blue with orange accents"
+    - "Add a particle animation background"
+    - "Enable dark mode toggle"
+    """
+    try:
+        from agents.teams.portfolio_team import portfolio_team
+        
+        prompt = request.message
+        if request.template_id:
+            prompt = f"Template: {request.template_id}\n\n{request.message}"
+        
+        response = await portfolio_team.arun(prompt)
+        
+        return APIResponse.success(
+            data={
+                "response": str(response),
+                "template_id": request.template_id,
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/features", response_model=APIResponse)
+async def list_available_features():
+    """
+    List all available features that can be toggled.
+    """
+    features = [
+        {"id": "dark_mode", "name": "Dark Mode Toggle", "default": True},
+        {"id": "animations", "name": "Animations", "default": True},
+        {"id": "contact_form", "name": "Contact Form", "default": True},
+        {"id": "blog_section", "name": "Blog Section", "default": False},
+    ]
+    return APIResponse.success(data={"features": features})
+

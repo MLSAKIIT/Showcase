@@ -1,0 +1,32 @@
+[run]
+source = app,agents
+branch = True
+omit =
+    */tests/*
+    */__pycache__/*
+    */migrations/*
+    */.venv/*
+    */venv/*
+    */setup_scripts/*
+    app/main.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    @abc.abstractmethod
+
+show_missing = True
+precision = 2
+fail_under = 60
+
+[html]
+directory = htmlcov
+title = Showcase Test Coverage
+
+[xml]
+output = coverage.xml

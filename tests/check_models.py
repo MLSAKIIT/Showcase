@@ -5,10 +5,10 @@ from dotenv import load_dotenv
 # Load your .env file
 load_dotenv()
 
-api_key = os.getenv("GOOGLE_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 if not api_key:
-    print("[X] Error: GOOGLE_API_KEY not found in .env")
+    print("[X] Error: No API key found in .env (GEMINI_API_KEY or GOOGLE_API_KEY)")
 else:
     try:
         client = genai.Client(api_key=api_key)

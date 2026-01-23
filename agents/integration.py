@@ -1,12 +1,10 @@
 """
-Main integration layer between backend services and the agent system.
+Integration layer between backend services and the Agno Teams agent system.
 
-Responsibilities:
-- Validate inputs
-- Invoke orchestrator pipeline
-- Handle errors cleanly
-- Provide async + sync APIs
-- Act as the single entry point for agent usage
+This module provides:
+- Input validation
+- Async + sync APIs for portfolio generation
+- Bridge to the new Teams architecture
 """
 
 from __future__ import annotations
@@ -15,10 +13,7 @@ import asyncio
 import logging
 from typing import Any, Dict, Optional, Tuple
 
-from agents.orchestrator.orchestrator_agent import get_orchestrator, PortfolioOrchestrator
-
 # Logging
-
 logger = logging.getLogger("agents.integration")
 logger.setLevel(logging.INFO)
 
@@ -29,6 +24,7 @@ if not logger.handlers:
     )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+
 
 # Domain Exceptions
 
@@ -54,7 +50,6 @@ def validate_input(parsed_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """
     Lightweight validation before running the pipeline.
     """
-
     if not isinstance(parsed_data, dict):
         return False, "parsed_data must be a dictionary"
 
@@ -74,7 +69,7 @@ def validate_input(parsed_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-# Core Async APIs
+# Core Async APIs using Agno Teams
 
 async def generate_portfolio(
     parsed_data: Dict[str, Any],
@@ -82,26 +77,39 @@ async def generate_portfolio(
 ) -> Dict[str, Any]:
     """
     Generate a complete portfolio configuration from parsed resume data.
+    Uses the new Agno Teams architecture.
     """
-
     is_valid, error = validate_input(parsed_data)
     if not is_valid:
         logger.warning("Input validation failed: %s", error)
         raise ValidationError(error)
 
     try:
-        logger.info("Starting portfolio generation")
-
-        # FIX: await get_orchestrator
-        orchestrator: PortfolioOrchestrator = await get_orchestrator(config)
-        portfolio = await orchestrator.process_resume(parsed_data)
-
+        logger.info("Starting portfolio generation with Agno Teams")
+        
+        from agents.teams.portfolio_team import portfolio_team
+        import json
+        
+        # Format data for the team
+        prompt = f"Generate a portfolio from this resume data:\n\n{json.dumps(parsed_data, indent=2)}"
+        
+        if config:
+            prompt += f"\n\nUser preferences:\n{json.dumps(config, indent=2)}"
+        
+        # Run the team
+        response = await portfolio_team.arun(prompt)
+        
         logger.info("Portfolio generation completed successfully")
-        return portfolio
+        
+        # Return the response as a dict
+        return {
+            "success": True,
+            "response": str(response),
+            "parsed_data": parsed_data,
+        }
 
     except ValidationError:
         raise
-
     except Exception as exc:
         logger.exception("Portfolio generation failed")
         raise GenerationError(str(exc)) from exc
@@ -116,7 +124,6 @@ async def regenerate_section(
     """
     Regenerate a specific section of an existing portfolio.
     """
-
     if not isinstance(current_portfolio, dict):
         raise ValidationError("current_portfolio must be a dictionary")
 
@@ -125,21 +132,31 @@ async def regenerate_section(
 
     try:
         logger.info("Regenerating section: %s", section)
+        
+        from agents.teams.portfolio_team import portfolio_team
+        import json
+        
+        prompt = f"""
+Regenerate the '{section}' section of this portfolio:
 
-        # FIX: await get_orchestrator
-        orchestrator: PortfolioOrchestrator = await get_orchestrator(config)
-        updated_portfolio = await orchestrator.regenerate_section(
-            current_portfolio=current_portfolio,
-            section=section,
-            preferences=preferences or {},
-        )
+Current portfolio:
+{json.dumps(current_portfolio, indent=2)}
 
+Preferences:
+{json.dumps(preferences or {}, indent=2)}
+"""
+        
+        response = await portfolio_team.arun(prompt)
+        
         logger.info("Section '%s' regenerated successfully", section)
-        return updated_portfolio
+        return {
+            "success": True,
+            "section": section,
+            "response": str(response),
+        }
 
     except ValidationError:
         raise
-
     except Exception as exc:
         logger.exception("Section regeneration failed")
         raise GenerationError(str(exc)) from exc
@@ -153,7 +170,8 @@ async def export_portfolio(
     """
     Export a portfolio to a supported format.
     """
-
+    import json
+    
     if not isinstance(portfolio, dict):
         raise ValidationError("portfolio must be a dictionary")
 
@@ -161,23 +179,36 @@ async def export_portfolio(
         raise ValidationError(f"Unsupported export format: {format}")
 
     try:
-        # FIX: await get_orchestrator
-        orchestrator: PortfolioOrchestrator = await get_orchestrator(config)
-        output = await orchestrator.export_portfolio(portfolio, format)
-
-        logger.info("Portfolio exported as %s", format)
-        return output
+        if format == "json":
+            return json.dumps(portfolio, indent=2, ensure_ascii=False)
+        
+        elif format == "yaml":
+            try:
+                import yaml
+                return yaml.dump(portfolio, allow_unicode=True, sort_keys=False)
+            except ImportError:
+                raise GenerationError("PyYAML not installed")
+        
+        elif format == "html_preview":
+            # Simple HTML preview
+            hero = portfolio.get("hero", {})
+            return f"""<!DOCTYPE html>
+<html>
+<head><title>{hero.get('name', 'Portfolio')}</title></head>
+<body>
+<h1>{hero.get('name', 'Portfolio')}</h1>
+<p>{hero.get('tagline', '')}</p>
+</body>
+</html>"""
 
     except Exception as exc:
         logger.exception("Portfolio export failed")
         raise GenerationError(str(exc)) from exc
 
 
-# Sync Wrappers 
+# Sync Wrappers
 def _run_async(coro):
-    """
-    Safe asyncio runner for sync contexts.
-    """
+    """Safe asyncio runner for sync contexts."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
