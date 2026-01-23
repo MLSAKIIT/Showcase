@@ -9,8 +9,17 @@ const GitHubCallback = () => {
 
     useEffect(() => {
         const code = searchParams.get("code");
+        const state = searchParams.get("state");
         const error = searchParams.get("error");
         const errorDescription = searchParams.get("error_description");
+
+        // Verify state matches what we stored (CSRF protection)
+        const storedState = sessionStorage.getItem("github_oauth_state");
+        if (state && storedState && state !== storedState) {
+            setStatus("error");
+            setErrorMessage("State mismatch - possible CSRF attack");
+            return;
+        }
 
         if (error) {
             setStatus("error");
@@ -24,21 +33,44 @@ const GitHubCallback = () => {
             return;
         }
 
+        // Check if this is a publish flow (state starts with "publish_") or connect flow
+        const isPublishFlow = state?.startsWith("publish_");
+        const isConnectFlow = state?.startsWith("connect_");
+
         // Send the code to your backend for token exchange
         const exchangeCode = async () => {
             try {
-                const response = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/v1/auth/github/callback`, {
+                // Determine endpoint based on flow type
+                let endpoint: string;
+                if (isPublishFlow || isConnectFlow) {
+                    endpoint = `${import.meta.env.VITE_API_URL || ""}/api/v1/deploy/github/callback`;
+                } else {
+                    endpoint = `${import.meta.env.VITE_API_URL || ""}/api/v1/auth/github/callback`;
+                }
+
+                // For publish flow, include portfolio data
+                const body: any = { code };
+                if (isPublishFlow) {
+                    const portfolioData = sessionStorage.getItem("pending_publish_portfolio");
+                    const jobId = sessionStorage.getItem("pending_publish_job_id");
+                    if (portfolioData) {
+                        body.portfolio_data = JSON.parse(portfolioData);
+                        body.job_id = jobId;
+                    }
+                }
+
+                const response = await fetch(endpoint, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({ code }),
-                    credentials: "include", // Include cookies for session management
+                    body: JSON.stringify(body),
+                    credentials: "include",
                 });
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.message || "Failed to authenticate with GitHub");
+                    throw new Error(errorData.message || (isPublishFlow ? "Failed to deploy" : "Failed to authenticate with GitHub"));
                 }
 
                 const data = await response.json();
@@ -48,10 +80,24 @@ const GitHubCallback = () => {
                     localStorage.setItem("auth_token", data.access_token);
                 }
 
+                // Store GitHub token for future deployments
+                if (data.github_token) {
+                    localStorage.setItem("github_token", data.github_token);
+                }
+
+                // Clean up session storage
+                sessionStorage.removeItem("github_oauth_state");
+                sessionStorage.removeItem("pending_publish_portfolio");
+                sessionStorage.removeItem("pending_publish_job_id");
+
                 setStatus("success");
 
-                // Redirect to dashboard or home after successful auth
+                // Redirect based on flow type
                 setTimeout(() => {
+                    if (isPublishFlow && data.deployment_url) {
+                        // Open the deployed site in a new tab
+                        window.open(data.deployment_url, "_blank");
+                    }
                     navigate("/", { replace: true });
                 }, 1500);
             } catch (err) {

@@ -12,11 +12,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, User as UserIcon, LayoutDashboard } from "lucide-react";
+import { LogOut, User as UserIcon, LayoutDashboard, Github } from "lucide-react";
 
 export const Header = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [githubConnected, setGithubConnected] = useState(false);
   const navigate = useNavigate();
+
+  // Check if GitHub is already connected
+  useEffect(() => {
+    const token = localStorage.getItem("github_token");
+    setGithubConnected(!!token);
+  }, []);
 
   // 🛡️ Listen for Auth State changes
   useEffect(() => {
@@ -38,6 +45,24 @@ export const Header = () => {
     } catch (error) {
       console.error("Logout failed:", error);
     }
+  };
+
+  // Connect GitHub account for deployment
+  const handleConnectGitHub = () => {
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/github/callback`;
+    const scope = "repo user:email";
+
+    const githubAuthUrl = new URL("https://github.com/login/oauth/authorize");
+    githubAuthUrl.searchParams.set("client_id", clientId);
+    githubAuthUrl.searchParams.set("redirect_uri", redirectUri);
+    githubAuthUrl.searchParams.set("scope", scope);
+
+    const state = `connect_${crypto.randomUUID()}`;
+    sessionStorage.setItem("github_oauth_state", state);
+    githubAuthUrl.searchParams.set("state", state);
+
+    window.location.href = githubAuthUrl.toString();
   };
 
   return (
@@ -77,6 +102,14 @@ export const Header = () => {
                 <DropdownMenuItem onClick={() => navigate("/editor")}>
                   <LayoutDashboard className="mr-2 h-4 w-4" />
                   <span>My Editor</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleConnectGitHub}
+                  disabled={githubConnected}
+                  className={githubConnected ? "text-green-500" : ""}
+                >
+                  <Github className="mr-2 h-4 w-4" />
+                  <span>{githubConnected ? "GitHub Connected" : "Connect GitHub"}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">

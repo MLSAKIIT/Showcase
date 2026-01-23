@@ -16,12 +16,14 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Upload
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import api from "@/lib/api";
+import { TemplateRenderer } from "@/components/TemplateRenderer";
 
 // Job status types
 type JobStatus = "pending" | "processing" | "ocr_extracting" | "ai_generating" | "validating" | "completed" | "failed" | "cancelled";
@@ -49,7 +51,7 @@ const Editor = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<"chat" | "code">("chat");
   const [isGenerating, setIsGenerating] = useState(false);
-  
+
   // Job status state
   const [jobStatus, setJobStatus] = useState<JobStatusData | null>(null);
   const [portfolioData, setPortfolioData] = useState<any>(null);
@@ -104,7 +106,7 @@ const Editor = () => {
             };
 
             const statusMessage = statusMessages[statusData.status] || "Processing...";
-            
+
             setMessages(prev => {
               const lastMsg = prev[prev.length - 1];
               if (lastMsg?.role === "assistant" && lastMsg.content.includes("analyzing")) {
@@ -121,7 +123,7 @@ const Editor = () => {
               try {
                 const portfolioResponse = await api.get(`/portfolio/${jobId}`);
                 const portfolio = portfolioResponse.data;
-                
+
                 // Log portfolio data for debugging
                 console.log("✅ Portfolio received:", {
                   id: portfolio.id,
@@ -133,7 +135,7 @@ const Editor = () => {
                   projects_count: portfolio.content?.projects?.length || 0,
                   skills_count: portfolio.content?.skills?.length || 0
                 });
-                
+
                 setPortfolioData(portfolio);
                 setMessages(prev => [...prev, {
                   role: "assistant",
@@ -228,6 +230,41 @@ const Editor = () => {
     }, 1500);
   };
 
+  // GitHub OAuth handler for publishing
+  const handlePublish = () => {
+    // Check if we have portfolio data to publish
+    if (!portfolioData) {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "⚠️ Please generate a portfolio first before publishing."
+      }]);
+      return;
+    }
+
+    // Store portfolio data in sessionStorage for after OAuth callback
+    sessionStorage.setItem("pending_publish_portfolio", JSON.stringify(portfolioData));
+    sessionStorage.setItem("pending_publish_job_id", jobId || "");
+
+    // GitHub OAuth configuration for repo access
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/github/callback`;
+    const scope = "repo user:email"; // Need repo scope to create/push to repos
+
+    // Build GitHub OAuth URL
+    const githubAuthUrl = new URL("https://github.com/login/oauth/authorize");
+    githubAuthUrl.searchParams.set("client_id", clientId);
+    githubAuthUrl.searchParams.set("redirect_uri", redirectUri);
+    githubAuthUrl.searchParams.set("scope", scope);
+
+    // Add state parameter for CSRF protection and to indicate publish flow
+    const state = `publish_${crypto.randomUUID()}`;
+    sessionStorage.setItem("github_oauth_state", state);
+    githubAuthUrl.searchParams.set("state", state);
+
+    // Redirect to GitHub
+    window.location.href = githubAuthUrl.toString();
+  };
+
   return (
     <div className="h-screen flex flex-col bg-background text-foreground">
       {/* Top Bar */}
@@ -244,8 +281,13 @@ const Editor = () => {
             <Play className="h-4 w-4" />
             Preview
           </Button>
-          <Button size="sm" className="bg-primary text-primary-foreground gap-2">
-            <Sparkles className="h-4 w-4" />
+          <Button
+            size="sm"
+            className="bg-primary text-primary-foreground gap-2"
+            onClick={handlePublish}
+            disabled={!portfolioData}
+          >
+            <Upload className="h-4 w-4" />
             Publish
           </Button>
         </div>
@@ -285,7 +327,7 @@ const Editor = () => {
                       </div>
                     </div>
                   ))}
-                  
+
                   {/* Job Status Display */}
                   {jobId && jobStatus && (
                     <div className="space-y-3">
@@ -347,7 +389,7 @@ const Editor = () => {
                       </Alert>
                     </div>
                   )}
-                  
+
                   {isGenerating && !jobStatus && (
                     <div className="flex justify-start">
                       <div className="bg-card border border-border rounded-lg px-4 py-2">
@@ -433,12 +475,12 @@ const Editor = () => {
                     {/* Debug info - remove in production */}
                     {process.env.NODE_ENV === 'development' && (
                       <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
-                        <strong>Debug:</strong> Portfolio ID: {portfolioData.id}, 
-                        Content type: {typeof portfolioData.content}, 
+                        <strong>Debug:</strong> Portfolio ID: {portfolioData.id},
+                        Content type: {typeof portfolioData.content},
                         Keys: {portfolioData.content ? Object.keys(portfolioData.content).join(', ') : 'none'}
                       </div>
                     )}
-                    
+
                     {/* Hero Section */}
                     <div className="mb-8 text-center border-b pb-6">
                       <h1 className="text-4xl font-bold text-gray-800 mb-2">
@@ -566,10 +608,10 @@ const Editor = () => {
                         <h2 className="text-2xl font-semibold text-gray-800 mb-4">Links</h2>
                         <div className="flex flex-wrap gap-3">
                           {Object.entries(portfolioData.content.links).map(([key, url]: [string, any]) => (
-                            <a 
-                              key={key} 
-                              href={url as string} 
-                              target="_blank" 
+                            <a
+                              key={key}
+                              href={url as string}
+                              target="_blank"
                               rel="noopener noreferrer"
                               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                             >
@@ -619,14 +661,12 @@ const Editor = () => {
                   </Button>
                 </div>
               ) : (
-                <div className="text-center p-8">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Portfolio Preview</h2>
-                  <p className="text-gray-600 mb-6">This is where your generated portfolio will appear</p>
-                  <div className="inline-flex gap-4">
-                    <div className="w-32 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg" />
-                    <div className="w-32 h-20 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg" />
-                    <div className="w-32 h-20 bg-gradient-to-br from-pink-500 to-orange-500 rounded-lg" />
-                  </div>
+                <div className="w-full h-full bg-white">
+                  {/* Dynamic Template Loader (WebContainer Simulation) */}
+                  <TemplateRenderer
+                    templateId={portfolioData?.template_id || "one_temp"}
+                    data={portfolioData}
+                  />
                 </div>
               )}
             </div>

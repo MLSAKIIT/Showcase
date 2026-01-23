@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any, Dict, Optional, Tuple
+from app.schemas.portfolio import PortfolioOutput
 
 # Logging
 logger = logging.getLogger("agents.integration")
@@ -77,7 +78,11 @@ async def generate_portfolio(
 ) -> Dict[str, Any]:
     """
     Generate a complete portfolio configuration from parsed resume data.
-    Uses the new Agno Teams architecture.
+    
+    OPTIMIZATION:
+    Uses a sequential pipeline (Data Injection) to minimize token usage.
+    1. Portfolio Creator (Structured Pydantic Output)
+    2. Template Selector (Lightweight text output)
     """
     is_valid, error = validate_input(parsed_data)
     if not is_valid:
@@ -85,27 +90,86 @@ async def generate_portfolio(
         raise ValidationError(error)
 
     try:
-        logger.info("Starting portfolio generation with Agno Teams")
+        logger.info("Starting optimized portfolio generation pipeline")
         
-        from agents.teams.portfolio_team import portfolio_team
+        from agents.teams.generation_team import portfolio_creator, template_selector
         import json
         
-        # Format data for the team
-        prompt = f"Generate a portfolio from this resume data:\n\n{json.dumps(parsed_data, indent=2)}"
+        # 1. Generate Structured Content (Data Injection)
+        # We send the raw data and get back a clean, validated Pydantic object
+        logger.info("Running Step 1: Content Generation & Structuring")
+        content_response = await portfolio_creator.arun(
+            f"Resume Data:\n{json.dumps(parsed_data, indent=2)}\n\nUser Config:\n{json.dumps(config or {}, indent=2)}",
+            response_model=PortfolioOutput
+        )
         
-        if config:
-            prompt += f"\n\nUser preferences:\n{json.dumps(config, indent=2)}"
+        # The content_response.content is already a PortfolioOutput Pydantic object!
+        # Access it directly.
+        structured_content = content_response.content
         
-        # Run the team
-        response = await portfolio_team.arun(prompt)
+        # 2. Select Template (Lightweight)
+        # We only send relevant snippets to save tokens
+        logger.info("Running Step 2: Template Selection")
+        role_hint = parsed_data.get("job_title", "Developer")
+        skills_hint = parsed_data.get("skills", [])[:5] # Top 5 skills only
         
-        logger.info("Portfolio generation completed successfully")
+        template_response = await template_selector.arun(
+            f"Role: {role_hint}\nTop Skills: {skills_hint}\nUser Config: {config or {}}"
+        )
         
-        # Return the response as a dict
+        # Clean up template ID (remove markdown code blocks if any)
+        selected_template_id = template_response.content.strip().replace("`", "")
+        
+        # 3. Apply Code Customizations (Optional - "Developer Mode")
+        # If the user requested specific design/code changes, we spin up a Developer Agent
+        if config and config.get("customization_prompt"):
+            logger.info("Running Step 3: Code Customization (Developer Mode)")
+            
+            from agno.agent import Agent
+            from agents.tools.code_tools import CodeModificationTools
+            from agents.tools.file_tools import FileSystemTools
+            
+            # Initialize tools pointing to the template directory
+            # In a real scenario, we'd copy the template to a build dir first
+            # But for now, we assume we are editing a copy or the source if allowed
+            
+            developer_agent = Agent(
+                name="Developer Agent",
+                role="Frontend Developer",
+                model=get_model(),
+                tools=[CodeModificationTools(), FileSystemTools()],
+                instructions=f"""
+                You are an expert Frontend Developer.
+                Your task is to modify the code of the selected template ('{selected_template_id}') 
+                based on the user's request.
+                
+                User Request: "{config.get('customization_prompt')}"
+                
+                Guidelines:
+                - Use `find_and_replace` or `update_css_variable` for safe edits.
+                - Do NOT break the build.
+                - Only modify style/content as requested.
+                """,
+            )
+            
+            # Execute the customization
+            await developer_agent.arun(f"Apply these changes to {selected_template_id}")
+            
+            final_portfolio["customizations_applied"] = True
+
+        logger.info(f"Pipeline completed. Template: {selected_template_id}")
+        
+        # 4. Assemble Final Result
+        # Convert Pydantic model to dict
+        final_portfolio = structured_content.model_dump()
+        final_portfolio["template_id"] = selected_template_id
+        
+        # Return standard response format
         return {
             "success": True,
-            "response": str(response),
+            "response": json.dumps(final_portfolio), # For legacy compatibility
             "parsed_data": parsed_data,
+            "portfolio_data": final_portfolio # The clean data
         }
 
     except ValidationError:
@@ -133,8 +197,8 @@ async def regenerate_section(
     try:
         logger.info("Regenerating section: %s", section)
         
-        from agents.teams.portfolio_team import portfolio_team
-        import json
+        # Import intentionally removed: using updater_agent below
+
         
         prompt = f"""
 Regenerate the '{section}' section of this portfolio:
@@ -146,7 +210,17 @@ Preferences:
 {json.dumps(preferences or {}, indent=2)}
 """
         
-        response = await portfolio_team.arun(prompt)
+        # Use a temporary generic agent for partial updates to avoid strict full-schema validation
+        from agno.agent import Agent
+        from agents.model import get_model
+        
+        updater_agent = Agent(
+            model=get_model(),
+            description="Update a specific section of JSON data",
+            instructions="Return only the updated JSON section. No markdown, no explanations."
+        )
+        
+        response = await updater_agent.arun(prompt)
         
         logger.info("Section '%s' regenerated successfully", section)
         return {
